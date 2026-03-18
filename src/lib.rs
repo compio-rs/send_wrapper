@@ -59,13 +59,13 @@
 //! `Cargo.toml` like so:
 //!
 //! ```toml
-//! send_wrapper = { version = "...", features = ["futures"] }
+//! compio-send-wrapper = { version = "...", features = ["futures"] }
 //! ```
 //!
 //! # License
 //!
-//! `send_wrapper` is distributed under the terms of both the MIT license and
-//! the Apache License (Version 2.0).
+//! `compio-send-wrapper` is distributed under the terms of both the MIT license
+//! and the Apache License (Version 2.0).
 //!
 //! See LICENSE-APACHE.txt, and LICENSE-MIT.txt for details.
 //!

@@ -6,19 +6,10 @@ between threads, as long as you access the contained value only from within the 
 make sure that the wrapper is dropped from within the original thread. If any of these constraints is violated,
 a panic occurs.
 
-The idea for this crate was born in the context of a [`GTK+`]/[`gtk-rs`]-based application. [`GTK+`] applications
-are strictly single-threaded. It is not allowed to call any [`GTK+`] method from a thread different to the main
-thread. Consequently, all [`gtk-rs`] structs are non-[`Send`].
-
-Sometimes you still want to do some work in background. It is possible to enqueue [`GTK+`] calls from there to be
-executed in the main thread [using `Glib`]. This way you can know, that the [`gtk-rs`] structs involved are only
-accessed in the main thread and will also be dropped there. This crate makes it possible for [`gtk-rs`] structs
-to leave the main thread.
-
 # Examples
 
 ```rust
-use send_wrapper::SendWrapper;
+use compio_send_wrapper::SendWrapper;
 use std::rc::Rc;
 use std::thread;
 use std::sync::mpsc::channel;
@@ -50,16 +41,10 @@ let t = thread::spawn(move || {
 let wrapped_value = receiver.recv().unwrap();
 
 // Now you can use the value again.
-let value = wrapped_value.deref();
-
-// alternatives for dereferencing:
-// let value = *wrapped_value;
-// let value: &NonSendType = &wrapped_value;
+let value = wrapped_value.get().unwrap();
 
 // alternatives for mutable dereferencing (value and wrapped_value must be mutable too, then):
-// let mut value = wrapped_value.deref_mut();
-// let mut value = &mut *wrapped_value;
-// let mut value: &mut NonSendType = &mut wrapped_value;
+// let mut value = wrapped_value.get_mut().unwrap();
 ```
 
 
@@ -67,13 +52,13 @@ let value = wrapped_value.deref();
 
 To use `SendWrapper` on `Future`s or `Stream`s, you should enable the Cargo feature `futures` first:
 ```toml
-send_wrapper = { version = "0.5", features = ["futures"] }
+compio-send-wrapper = { version = "0.5", features = ["futures"] }
 ```
 
 Then, you can transparently wrap your `Future` or `Stream`:
 ```rust
 use futures::{executor, future::{self, BoxFuture}};
-use send_wrapper::SendWrapper;
+use compio_send_wrapper::SendWrapper;
 
 // `Rc` is a `!Send` type,
 let value = Rc::new(42);
@@ -98,13 +83,10 @@ See [CHANGELOG.md](CHANGELOG.md)
 
 # License
 
-`send_wrapper` is distributed under the terms of both the MIT license and the Apache License (Version 2.0).
+`compio-send-wrapper` is distributed under the terms of both the MIT license and the Apache License (Version 2.0).
 
 See LICENSE-APACHE, and LICENSE-MIT for details.
 
 
 [Rust]: https://www.rust-lang.org
 [`Send`]: https://doc.rust-lang.org/std/marker/trait.Send.html
-[`gtk-rs`]: http://gtk-rs.org/
-[`GTK+`]: https://www.gtk.org/
-[using `Glib`]: http://gtk-rs.org/docs/glib/source/fn.idle_add.html
