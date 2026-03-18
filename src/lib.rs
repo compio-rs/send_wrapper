@@ -159,11 +159,11 @@ impl<T> SendWrapper<T> {
     /// `SendWrapper<T>` instance has been created with.
     #[track_caller]
     pub fn take(self) -> Option<T> {
-        if !self.valid() {
-            invalid_deref()
-        } else {
+        if self.valid() {
             // SAFETY: the same thread as the creator
             Some(unsafe { self.take_unchecked() })
+        } else {
+            None
         }
     }
 
