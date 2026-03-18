@@ -14,10 +14,6 @@ use std::rc::Rc;
 use std::thread;
 use std::sync::mpsc::channel;
 
-// This import is important. It allows you to unwrap the value using deref(),
-// deref_mut() or Deref coercion.
-use std::ops::{Deref, DerefMut};
-
 // Rc is a non-Send type.
 let value = Rc::new(42);
 
@@ -29,8 +25,8 @@ let (sender, receiver) = channel();
 
 let t = thread::spawn(move || {
 
-	// This would panic (because of dereferencing in wrong thread):
-	// let value = wrapped_value.deref();
+	// This would panic (because of accessing in the wrong thread):
+	// let value = wrapped_value.get().unwrap();
 
 	// Move SendWrapper back to main thread, so it can be dropped from there.
 	// If you leave this out the thread will panic because of dropping from wrong thread.
@@ -52,7 +48,7 @@ let value = wrapped_value.get().unwrap();
 
 To use `SendWrapper` on `Future`s or `Stream`s, you should enable the Cargo feature `futures` first:
 ```toml
-compio-send-wrapper = { version = "0.5", features = ["futures"] }
+compio-send-wrapper = { version = "0.7", features = ["futures"] }
 ```
 
 Then, you can transparently wrap your `Future` or `Stream`:

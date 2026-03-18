@@ -17,8 +17,6 @@
 //! # Examples
 //!
 //! ```rust
-//! // This import is important if you want to use deref() or
-//! // deref_mut() instead of Deref coercion.
 //! use std::{rc::Rc, sync::mpsc::channel, thread};
 //!
 //! use compio_send_wrapper::SendWrapper;
@@ -33,8 +31,8 @@
 //! let (sender, receiver) = channel();
 //!
 //! let t = thread::spawn(move || {
-//!     // This would panic (because of dereferencing in wrong thread):
-//!     // let value = wrapped_value.deref();
+//!     // This would panic (because of accessing in the wrong thread):
+//!     // let value = wrapped_value.get().unwrap();
 //!
 //!     // Move SendWrapper back to main thread, so it can be dropped from there.
 //!     // If you leave this out the thread will panic because of dropping from wrong thread.
@@ -54,12 +52,21 @@
 //!
 //! # Features
 //!
-//! This crate has a single feature called `futures` that enables [`Future`] and
-//! [`Stream`] implementations for [`SendWrapper`]. You can enable it in
-//! `Cargo.toml` like so:
+//! This crate exposes several optional features:
+//!
+//! - `futures`: Enables [`Future`] and [`Stream`] implementations for [`SendWrapper`].
+//! - `current_thread_id`: Uses the unstable [`std::thread::current_id`] API (on
+//!   nightly Rust) to track the originating thread more efficiently.
+//! - `nightly`: Enables nightly-only, experimental functionality used by this
+//!   crate (including support for `current_thread_id` as configured in
+//!   `Cargo.toml`).
+//!
+//! You can enable them in `Cargo.toml` like so:
 //!
 //! ```toml
 //! compio-send-wrapper = { version = "...", features = ["futures"] }
+//! # or, for example:
+//! # compio-send-wrapper = { version = "...", features = ["futures", "current_thread_id"] }
 //! ```
 //!
 //! # License
@@ -145,7 +152,9 @@ impl<T> SendWrapper<T> {
         let mut this = ManuallyDrop::new(self);
 
         // Safety:
-        // - We've just checked that it's valid to access `T` from the current thread
+        // - The caller of this unsafe function guarantees that it's valid to access
+        //   `T` from the current thread (the safe `take` method enforces this
+        //   precondition before calling `take_unchecked`).
         // - We only move out from `self.data` here and in drop, so `self.data` is
         //   present
         unsafe { ManuallyDrop::take(&mut this.data) }
@@ -258,6 +267,71 @@ impl<T> SendWrapper<T> {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::SendWrapper;
+    use std::pin::Pin;
+    use std::thread;
+
+    #[test]
+    fn get_and_get_mut_on_creator_thread_and_pinned_variants() {
+        let mut wrapper = SendWrapper::new(1_i32);
+
+        // On the creator thread, the plain accessors should return Some.
+        let r = wrapper.get();
+        assert!(r.is_some());
+        assert_eq!(*r.unwrap(), 1);
+
+        let r_mut = wrapper.get_mut();
+        assert!(r_mut.is_some());
+        *r_mut.unwrap() = 2;
+
+        // The change via get_mut should be visible via get as well.
+        let r_after = wrapper.get();
+        assert!(r_after.is_some());
+        assert_eq!(*r_after.unwrap(), 2);
+
+        // Pinned shared reference should also succeed on the creator thread.
+        let pinned = Pin::new(&wrapper);
+        let pinned_ref = pinned.get_pinned();
+        assert!(pinned_ref.is_some());
+        assert_eq!(*pinned_ref.unwrap(), 2);
+
+        // Pinned mutable reference should succeed and allow mutation.
+        let mut wrapper2 = SendWrapper::new(10_i32);
+        let pinned_mut = Pin::new(&mut wrapper2);
+        let pinned_mut_ref = pinned_mut.get_pinned_mut();
+        assert!(pinned_mut_ref.is_some());
+        *pinned_mut_ref.unwrap() = 11;
+
+        let after_mut = wrapper2.get();
+        assert!(after_mut.is_some());
+        assert_eq!(*after_mut.unwrap(), 11);
+    }
+
+    #[test]
+    fn accessors_return_none_on_non_creator_thread() {
+        let mut wrapper = SendWrapper::new(123_i32);
+
+        // Move the wrapper to another thread; that thread is not the creator.
+        let handle = thread::spawn(move || {
+            // Plain accessors should return None on non-creator thread.
+            assert!(wrapper.get().is_none());
+            assert!(wrapper.get_mut().is_none());
+
+            // Pinned accessors should also return None on non-creator thread.
+            let pinned = Pin::new(&wrapper);
+            assert!(pinned.get_pinned().is_none());
+
+            let mut wrapper = wrapper;
+            let pinned_mut = Pin::new(&mut wrapper);
+            assert!(pinned_mut.get_pinned_mut().is_none());
+        });
+
+        handle.join().unwrap();
+    }
+}
+
 unsafe impl<T> Send for SendWrapper<T> {}
 unsafe impl<T> Sync for SendWrapper<T> {}
 
@@ -300,10 +374,9 @@ impl<T> Drop for SendWrapper<T> {
 impl<T: fmt::Debug> fmt::Debug for SendWrapper<T> {
     /// Formats the value using the given formatter.
     ///
-    /// # Panics
-    ///
-    /// Formatting panics if it is done from a different thread than the one
-    /// the `SendWrapper<T>` instance has been created with.
+    /// If the `SendWrapper<T>` is formatted from a different thread than the one
+    /// it was created on, the `data` field is shown as `"<invalid>"` instead of
+    /// causing a panic.
     #[track_caller]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut f = f.debug_struct("SendWrapper");
@@ -333,7 +406,7 @@ impl<T: Clone> Clone for SendWrapper<T> {
 #[inline(never)]
 #[track_caller]
 fn invalid_deref() -> ! {
-    const DEREF_ERROR: &str = "Dereferenced SendWrapper<T> variable from a thread different to \
+    const DEREF_ERROR: &str = "Accessed SendWrapper<T> variable from a thread different to \
                                the one it has been created with.";
 
     panic!("{}", DEREF_ERROR)
