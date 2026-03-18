@@ -1,8 +1,7 @@
 [package]
-name = "send_wrapper"
-version = "0.6.0"
-edition = "2018"
-authors = ["Thomas Keh"]
+name = "compio-send-wrapper"
+version = "0.7.0"
+edition = "2024"
 license = "MIT/Apache-2.0"
 description = """
 This Rust library implements a wrapper type called SendWrapper which allows you to move around non-Send types
@@ -11,12 +10,15 @@ make sure that the wrapper is dropped from within the original thread. If any of
 a panic occurs."""
 keywords = ["send", "wrapper", "thread_local"]
 readme = "README.md"
-repository = "https://github.com/thk1/send_wrapper"
-documentation = "https://docs.rs/send_wrapper"
+repository = "https://github.com/compio-rs/send_wrapper"
+documentation = "https://docs.rs/compio-send-wrapper"
 categories = ["rust-patterns"]
 
 [features]
 futures = ["futures-core"]
+
+current_thread_id = []
+nightly = ["current_thread_id"]
 
 [dependencies]
 futures-core = { version = "0.3", optional = true }
