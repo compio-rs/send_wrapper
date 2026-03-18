@@ -168,12 +168,12 @@ impl<T> SendWrapper<T> {
     /// Panics if it is called from a different thread than the one the
     /// `SendWrapper<T>` instance has been created with.
     #[track_caller]
-    pub fn take(self) -> Option<T> {
+    pub fn take(self) -> T {
         if self.valid() {
             // SAFETY: the same thread as the creator
-            Some(unsafe { self.take_unchecked() })
+            unsafe { self.take_unchecked() }
         } else {
-            None
+            invalid_deref()
         }
     }
 
@@ -480,7 +480,7 @@ mod tests {
     #[test]
     fn test_take() {
         let w = SendWrapper::new(Rc::new(42));
-        let inner: Rc<usize> = w.take().unwrap();
+        let inner: Rc<usize> = w.take();
         assert_eq!(42, *inner);
     }
 
@@ -488,7 +488,7 @@ mod tests {
     fn test_take_panic() {
         let w = SendWrapper::new(Rc::new(42));
         let t = thread::spawn(move || {
-            let _ = w.take().unwrap();
+            let _ = w.take();
         });
         assert!(t.join().is_err());
     }
