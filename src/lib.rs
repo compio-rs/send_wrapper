@@ -89,32 +89,47 @@
 #[cfg_attr(docsrs, doc(cfg(feature = "futures")))]
 mod futures;
 
-#[cfg(feature = "current_thread_id")]
-use std::thread::current_id;
 use std::{
     fmt,
     mem::{self, ManuallyDrop},
     pin::Pin,
-    thread::{self, ThreadId},
 };
 
-#[cfg(not(feature = "current_thread_id"))]
-mod imp {
-    use std::{
-        cell::Cell,
-        thread::{self, ThreadId},
-    };
-    thread_local! {
-        static THREAD_ID: Cell<ThreadId> = Cell::new(thread::current().id());
-    }
+cfg_if::cfg_if! {
+    if #[cfg(loom)] {
+        use loom::{
+            cell::Cell,
+            thread::{self, ThreadId},
+        };
 
-    pub fn current_id() -> ThreadId {
-        THREAD_ID.get()
+        loom::thread_local! {
+            static THREAD_ID: Cell<ThreadId> = Cell::new(thread::current().id());
+        }
+
+        /// Get the current mocked [`ThreadId`].
+        pub fn current_id() -> ThreadId {
+            THREAD_ID.with(|id| id.get())
+        }
+
+    } else if #[cfg(feature = "current_thread_id")] {
+        use std::thread::{self, current_id, ThreadId};
+
+    } else {
+        use std::{
+            cell::Cell,
+            thread::{self, ThreadId},
+        };
+
+        thread_local! {
+            static THREAD_ID: Cell<ThreadId> = Cell::new(thread::current().id());
+        }
+
+        /// Get the current [`ThreadId`].
+        pub fn current_id() -> ThreadId {
+            THREAD_ID.get()
+        }
     }
 }
-
-#[cfg(not(feature = "current_thread_id"))]
-use imp::current_id;
 
 /// A wrapper which allows you to move around non-[`Send`]-types between
 /// threads, as long as you access the contained value only from within the
