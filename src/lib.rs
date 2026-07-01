@@ -122,9 +122,9 @@ cfg_if::cfg_if! {
 /// threads, as long as you access the contained value only from within the
 /// original thread and make sure that it is dropped from within the original
 /// thread.
-pub struct SendWrapper<T> {
-    data: ManuallyDrop<T>,
+pub struct SendWrapper<T: ?Sized> {
     thread_id: ThreadId,
+    data: ManuallyDrop<T>,
 }
 
 impl<T> SendWrapper<T> {
@@ -136,13 +136,6 @@ impl<T> SendWrapper<T> {
             data: ManuallyDrop::new(data),
             thread_id: current_id(),
         }
-    }
-
-    /// Returns `true` if the value can be safely accessed from within the
-    /// current thread.
-    #[inline]
-    pub fn valid(&self) -> bool {
-        self.thread_id == current_id()
     }
 
     /// Takes the value out of the `SendWrapper<T>`.
@@ -177,6 +170,15 @@ impl<T> SendWrapper<T> {
         } else {
             invalid_deref()
         }
+    }
+}
+
+impl<T: ?Sized> SendWrapper<T> {
+    /// Returns `true` if the value can be safely accessed from within the
+    /// current thread.
+    #[inline]
+    pub fn valid(&self) -> bool {
+        self.thread_id == current_id()
     }
 
     /// Returns a reference to the contained value.
@@ -270,10 +272,10 @@ impl<T> SendWrapper<T> {
     }
 }
 
-unsafe impl<T> Send for SendWrapper<T> {}
-unsafe impl<T> Sync for SendWrapper<T> {}
+unsafe impl<T: ?Sized> Send for SendWrapper<T> {}
+unsafe impl<T: ?Sized> Sync for SendWrapper<T> {}
 
-impl<T> Drop for SendWrapper<T> {
+impl<T: ?Sized> Drop for SendWrapper<T> {
     /// Drops the contained value.
     ///
     /// # Panics
@@ -309,7 +311,7 @@ impl<T> Drop for SendWrapper<T> {
     }
 }
 
-impl<T: fmt::Debug> fmt::Debug for SendWrapper<T> {
+impl<T: fmt::Debug + ?Sized> fmt::Debug for SendWrapper<T> {
     /// Formats the value using the given formatter.
     ///
     /// If the `SendWrapper<T>` is formatted from a different thread than the
@@ -319,7 +321,7 @@ impl<T: fmt::Debug> fmt::Debug for SendWrapper<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut f = f.debug_struct("SendWrapper");
         if let Some(data) = self.get() {
-            f.field("data", data);
+            f.field("data", &data);
         } else {
             f.field("data", &"<invalid>");
         }

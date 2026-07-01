@@ -5,7 +5,7 @@ use futures_core::Stream;
 
 use crate::{SendWrapper, invalid_deref, invalid_poll};
 
-impl<F: Future> Future for SendWrapper<F> {
+impl<F: Future + ?Sized> Future for SendWrapper<F> {
     type Output = F::Output;
 
     /// Polls this [`SendWrapper`] [`Future`].
@@ -22,7 +22,7 @@ impl<F: Future> Future for SendWrapper<F> {
     }
 }
 
-impl<S: Stream> Stream for SendWrapper<S> {
+impl<S: Stream + ?Sized> Stream for SendWrapper<S> {
     type Item = S::Item;
 
     /// Polls this [`SendWrapper`] [`Stream`].
